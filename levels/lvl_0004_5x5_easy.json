@@ -1,0 +1,100 @@
+{
+  "level_id": "lvl_0004_5x5_easy",
+  "grid_size": 5,
+  "difficulty": "Easy",
+  "dots": [
+    {
+      "color_id": 1,
+      "p1": [
+        0,
+        0
+      ],
+      "p2": [
+        0,
+        3
+      ]
+    },
+    {
+      "color_id": 2,
+      "p1": [
+        0,
+        4
+      ],
+      "p2": [
+        1,
+        2
+      ]
+    },
+    {
+      "color_id": 3,
+      "p1": [
+        1,
+        1
+      ],
+      "p2": [
+        2,
+        0
+      ]
+    },
+    {
+      "color_id": 4,
+      "p1": [
+        2,
+        1
+      ],
+      "p2": [
+        2,
+        3
+      ]
+    },
+    {
+      "color_id": 5,
+      "p1": [
+        2,
+        4
+      ],
+      "p2": [
+        3,
+        2
+      ]
+    },
+    {
+      "color_id": 6,
+      "p1": [
+        3,
+        1
+      ],
+      "p2": [
+        4,
+        0
+      ]
+    },
+    {
+      "color_id": 7,
+      "p1": [
+        4,
+        1
+      ],
+      "p2": [
+        4,
+        4
+      ]
+    }
+  ],
+  "metrics": {
+    "target_moves": 25,
+    "color_count": 7,
+    "existing_level_pool": 3,
+    "duplicate_rejections": 0,
+    "min_solution_path_cells": 3,
+    "solution_coverage_cells": 25,
+    "solution_coverage_ratio": 1.0,
+    "solver_search_nodes": 8,
+    "solver_backtracks": 1,
+    "solver_forced_moves": 6,
+    "solver_branch_points": 1,
+    "solver_candidate_paths": 8,
+    "solver_max_depth": 7,
+    "forced_move_ratio": 0.857
+  }
+}

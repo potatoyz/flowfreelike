@@ -1,0 +1,10 @@
+[project]
+name = "flowfreelike"
+version = "0.1.0"
+description = "Flow Free-like level generator and solver"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+flowfreelike = "flowfreelike.cli:main"
