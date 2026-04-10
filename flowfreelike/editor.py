@@ -34,6 +34,18 @@ DEFAULT_EDITOR_PALETTE = (
     {"name": "Berry", "hex": "#d94680"},
     {"name": "Slate", "hex": "#475569"},
     {"name": "Copper", "hex": "#c56a2d"},
+    {"name": "Coral", "hex": "#ff7f50"},
+    {"name": "Aqua", "hex": "#00bcd4"},
+    {"name": "Lime", "hex": "#8bc34a"},
+    {"name": "Rose", "hex": "#f06292"},
+    {"name": "Indigo", "hex": "#3f51b5"},
+    {"name": "Amber", "hex": "#ffb300"},
+    {"name": "Teal", "hex": "#00897b"},
+    {"name": "Magenta", "hex": "#c2185b"},
+    {"name": "Olive", "hex": "#7cb342"},
+    {"name": "Sky", "hex": "#42a5f5"},
+    {"name": "Crimson", "hex": "#e53935"},
+    {"name": "Gold", "hex": "#f9a825"},
 )
 
 
