@@ -2,17 +2,16 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 from pathlib import Path
 
-from flowfreelike.generator import export_level, generate_level, make_level_id
-from flowfreelike.models import Dot, Solution, solution_from_dict
-from flowfreelike.registry import build_level_fingerprint, build_level_index, load_level_definition
+from flowfreelike.editor import build_level_filename, format_level_number, launch_editor, parse_level_number
+from flowfreelike.generator import export_level, generate_level
+from flowfreelike.models import Dot
+from flowfreelike.registry import build_level_fingerprint, build_level_index
 from flowfreelike.solver import solve_puzzle
 from flowfreelike.validation import validate_level_collection, validate_puzzle
 
 DEFAULT_LEVELS_DIR = Path("levels")
-LEVEL_ID_PATTERN = re.compile(r"lvl_(\d+)")
 
 
 def main() -> None:
@@ -67,14 +66,6 @@ def main() -> None:
     solve_parser = subparsers.add_parser("solve", help="Verify a level JSON file with the solver.")
     solve_parser.add_argument("input", type=Path, help="Path to a level JSON file.")
 
-    preview_parser = subparsers.add_parser("preview", help="Preview a level JSON file in ASCII.")
-    preview_parser.add_argument("input", type=Path, help="Path to a level JSON file.")
-    preview_parser.add_argument(
-        "--hide-solution",
-        action="store_true",
-        help="Only render the endpoint layout and skip the solved board.",
-    )
-
     validate_parser = subparsers.add_parser("validate", help="Validate a level JSON file or directory.")
     validate_parser.add_argument(
         "target",
@@ -82,6 +73,43 @@ def main() -> None:
         type=Path,
         default=DEFAULT_LEVELS_DIR,
         help="Level JSON file or directory to validate. Defaults to levels/.",
+    )
+
+    editor_parser = subparsers.add_parser("editor", help="Launch a browser-based manual level editor.")
+    editor_parser.add_argument("--size", type=int, default=5, help="Initial grid size for the editor.")
+    editor_parser.add_argument(
+        "--input",
+        type=Path,
+        default=None,
+        help="Optional existing level JSON file to preload into the editor.",
+    )
+    editor_parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Optional default output path shown in the editor save field.",
+    )
+    editor_parser.add_argument(
+        "--levels-dir",
+        type=Path,
+        default=DEFAULT_LEVELS_DIR,
+        help="Directory used for duplicate checks while validating editor drafts.",
+    )
+    editor_parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Host interface used for the local editor web server.",
+    )
+    editor_parser.add_argument(
+        "--port",
+        type=int,
+        default=0,
+        help="Port used for the local editor web server. Defaults to an automatic free port.",
+    )
+    editor_parser.add_argument(
+        "--no-browser",
+        action="store_true",
+        help="Start the editor server without opening a browser tab automatically.",
     )
 
     args = parser.parse_args()
@@ -113,12 +141,20 @@ def main() -> None:
         )
         return
 
-    if args.command == "preview":
-        _run_preview(args)
-        return
-
     if args.command == "validate":
         _run_validate(args)
+        return
+
+    if args.command == "editor":
+        launch_editor(
+            size=args.size,
+            input_path=args.input,
+            output_path=args.output,
+            levels_dir=args.levels_dir,
+            host=args.host,
+            port=args.port,
+            open_browser=not args.no_browser,
+        )
         return
 
 
@@ -243,145 +279,12 @@ def _run_validate(args: argparse.Namespace) -> None:
         raise SystemExit(1)
 
 
-def _run_preview(args: argparse.Namespace) -> None:
-    definition = load_level_definition(args.input)
-    if definition is None:
-        raise SystemExit(f"Failed to parse level JSON: {args.input}")
-
-    data, size, dots = definition
-    level_id = str(data.get("level_id", args.input.stem))
-    difficulty = str(data.get("difficulty", "Unknown"))
-
-    print(f"{level_id} ({size}x{size}, {difficulty})")
-    print(f"colors={len(dots)} source={args.input}")
-    print()
-    print("Endpoints")
-    print(_render_board(_endpoint_cells(size, dots)))
-
-    if args.hide_solution:
-        return
-
-    solution, source_label = _load_preview_solution(data, size, dots)
-    print()
-    if solution is None:
-        print("Solution")
-        print(f"unavailable ({source_label})")
-        return
-
-    print(f"Solution [{source_label}]")
-    print(_render_board(_solution_cells(size, solution)))
-
-
-def _load_preview_solution(
-    data: dict[str, object],
-    size: int,
-    dots: list[Dot],
-) -> tuple[Solution | None, str]:
-    embedded_issue = None
-    try:
-        embedded_solution = solution_from_dict(data.get("solution"))
-    except ValueError as exc:
-        embedded_solution = None
-        embedded_issue = str(exc)
-
-    if embedded_solution is not None:
-        normalized_solution, embedded_issue = _normalize_preview_solution(size, dots, embedded_solution)
-        if normalized_solution is not None:
-            return normalized_solution, "embedded"
-
-    result = solve_puzzle(size=size, dots=dots, solution_limit=1, completion_mode="full")
-    if result.is_unique and result.solutions:
-        source = "solver fallback" if embedded_issue else "solver"
-        return result.solutions[0], source
-    if embedded_issue:
-        return None, f"invalid embedded solution; solver={result.status}"
-    return None, result.status
-
-
-def _endpoint_cells(size: int, dots: list[Dot]) -> list[list[str]]:
-    board = [["." for _ in range(size)] for _ in range(size)]
-    for dot in dots:
-        label = str(dot.color_id)
-        for x, y in (dot.p1, dot.p2):
-            board[y][x] = label
-    return board
-
-
-def _solution_cells(size: int, solution: Solution) -> list[list[str]]:
-    board = [["." for _ in range(size)] for _ in range(size)]
-    for color_id, path in sorted(solution.items()):
-        label = str(color_id)
-        for x, y in path:
-            board[y][x] = label
-    return board
-
-
-def _render_board(board: list[list[str]]) -> str:
-    size = len(board)
-    labels = [cell for row in board for cell in row if cell != "."]
-    cell_width = max(
-        1,
-        len(str(size - 1)),
-        max((len(label) for label in labels), default=1),
-    )
-
-    header = " " * (cell_width + 1) + " ".join(f"{index:>{cell_width}}" for index in range(size))
-    rows = [header]
-    for y, row in enumerate(board):
-        rows.append(f"{y:>{cell_width}} " + " ".join(f"{cell:>{cell_width}}" for cell in row))
-    return "\n".join(rows)
-
-
-def _normalize_preview_solution(
-    size: int,
-    dots: list[Dot],
-    solution: Solution,
-) -> tuple[Solution | None, str | None]:
-    dot_by_color = {dot.color_id: dot for dot in dots}
-    if set(solution) != set(dot_by_color):
-        return None, "solution colors do not match dots."
-
-    normalized: Solution = {}
-    occupied: set[tuple[int, int]] = set()
-
-    for color_id, dot in dot_by_color.items():
-        path = solution[color_id]
-        if path[0] == dot.p2 and path[-1] == dot.p1:
-            path = tuple(reversed(path))
-        elif path[0] != dot.p1 or path[-1] != dot.p2:
-            return None, f"color {color_id} endpoints do not match."
-
-        seen_in_path: set[tuple[int, int]] = set()
-        previous_point = None
-        for point in path:
-            if not (0 <= point[0] < size and 0 <= point[1] < size):
-                return None, f"color {color_id} uses out-of-bounds point {point}."
-            if point in seen_in_path:
-                return None, f"color {color_id} repeats point {point}."
-            if point in occupied:
-                return None, f"solution overlaps at point {point}."
-            if previous_point is not None:
-                distance = abs(point[0] - previous_point[0]) + abs(point[1] - previous_point[1])
-                if distance != 1:
-                    return None, f"color {color_id} has a non-adjacent step."
-            seen_in_path.add(point)
-            occupied.add(point)
-            previous_point = point
-
-        normalized[color_id] = path
-
-    if len(occupied) != size * size:
-        return None, f"solution covers {len(occupied)}/{size * size} cells."
-    return normalized, None
-
-
 def _next_level_number(output_dir: Path) -> int:
     max_number = 0
     if output_dir.exists():
         for path in output_dir.glob("*.json"):
-            match = LEVEL_ID_PATTERN.search(path.stem)
-            if match:
-                max_number = max(max_number, int(match.group(1)))
+            if (level_number := parse_level_number(path)) is not None:
+                max_number = max(max_number, level_number)
     return max_number + 1
 
 
@@ -389,12 +292,8 @@ def _reserve_output_path(output_dir: Path, puzzle, next_level_number: int) -> tu
     output_dir.mkdir(parents=True, exist_ok=True)
     level_number = next_level_number
     while True:
-        level_id = make_level_id(
-            level_number=level_number,
-            size=puzzle.grid_size,
-            difficulty=puzzle.difficulty,
-        )
-        output_path = output_dir / f"{level_id}.json"
+        level_id = format_level_number(level_number)
+        output_path = output_dir / build_level_filename(level_number)
         if not output_path.exists():
             puzzle.level_id = level_id
             return level_number + 1, output_path

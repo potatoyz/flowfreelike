@@ -1,0 +1,1093 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FlowFreeLike Manual Level Panel</title>
+  <style>
+    :root {
+      --paper: #f5efe3;
+      --panel: rgba(255, 252, 246, 0.88);
+      --ink: #1d2533;
+      --muted: #5a6678;
+      --line: rgba(29, 37, 51, 0.12);
+      --line-strong: rgba(29, 37, 51, 0.22);
+      --accent: #c76631;
+      --accent-soft: rgba(199, 102, 49, 0.14);
+      --focus: #1f8a70;
+      --success: #1f8a70;
+      --warning: #b56a00;
+      --danger: #c83b4d;
+      --shadow: 0 22px 60px rgba(57, 44, 22, 0.14);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Bahnschrift", "Trebuchet MS", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(31, 138, 112, 0.12), transparent 28%),
+        radial-gradient(circle at right 15%, rgba(199, 102, 49, 0.16), transparent 24%),
+        linear-gradient(160deg, #f7f1e5 0%, #efe3cf 45%, #f3ebe0 100%);
+    }
+
+    button, input, select { font: inherit; }
+
+    .app-shell {
+      display: grid;
+      grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
+      gap: 20px;
+      padding: 24px;
+      min-height: 100vh;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid rgba(255, 255, 255, 0.7);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(12px);
+    }
+
+    .controls {
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      position: sticky;
+      top: 24px;
+      height: fit-content;
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-rows: minmax(0, 1fr) minmax(220px, auto);
+      gap: 20px;
+      min-height: calc(100vh - 48px);
+    }
+
+    .board-panel, .output-panel {
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      min-height: 0;
+    }
+
+    .brand, .board-title { display: grid; gap: 8px; }
+
+    .brand h1, .section-header h2, .board-title h2 {
+      margin: 0;
+      letter-spacing: 0.03em;
+    }
+
+    .brand h1 { font-size: 1.25rem; text-transform: uppercase; }
+
+    .board-title h2 {
+      font-size: 1.3rem;
+      text-transform: none;
+    }
+
+    .brand p, .hint, .board-caption {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+
+    .panel-block {
+      display: grid;
+      gap: 12px;
+      padding: 16px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.48);
+      border: 1px solid rgba(29, 37, 51, 0.06);
+    }
+
+    .section-header, .board-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    label {
+      display: grid;
+      gap: 6px;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+
+    input[type="text"], input[type="number"], select {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--line-strong);
+      background: rgba(255, 255, 255, 0.9);
+      color: var(--ink);
+      outline: none;
+    }
+
+    input[type="text"]:focus, input[type="number"]:focus, select:focus {
+      border-color: var(--focus);
+      box-shadow: 0 0 0 3px rgba(31, 138, 112, 0.14);
+    }
+
+    input[type="color"] {
+      width: 46px;
+      height: 40px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+    }
+
+    .field-row, .actions, .tool-row {
+      display: grid;
+      gap: 10px;
+    }
+
+    .field-row, .actions, .tool-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .single-action { grid-template-columns: 1fr; }
+
+    button {
+      border: 0;
+      border-radius: 14px;
+      padding: 11px 14px;
+      cursor: pointer;
+      background: var(--ink);
+      color: white;
+      transition: transform 120ms ease, opacity 120ms ease, background 120ms ease;
+    }
+
+    button:hover { transform: translateY(-1px); }
+    button:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+
+    .ghost { background: rgba(29, 37, 51, 0.08); color: var(--ink); }
+    .accent { background: linear-gradient(135deg, #d8783d, #bc5024); }
+    .danger { background: rgba(200, 59, 77, 0.12); color: var(--danger); }
+
+    .tool-button[data-active="true"], .palette-select[data-active="true"] {
+      background: var(--accent-soft);
+      color: var(--ink);
+      box-shadow: inset 0 0 0 1px rgba(199, 102, 49, 0.35);
+    }
+
+    .palette-list { display: grid; gap: 10px; }
+
+    .palette-item {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 52px 1fr 44px;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .palette-select {
+      width: 100%;
+      display: grid;
+      grid-template-columns: 18px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+      background: rgba(29, 37, 51, 0.05);
+      color: var(--ink);
+      text-align: left;
+    }
+
+    .swatch {
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9);
+    }
+
+    .palette-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .palette-length { color: var(--muted); font-size: 0.85rem; }
+
+    .status-banner {
+      padding: 14px 16px;
+      border-radius: 16px;
+      font-weight: 600;
+      line-height: 1.5;
+    }
+
+    .status-banner.neutral { background: rgba(29, 37, 51, 0.08); color: var(--ink); }
+    .status-banner.success { background: rgba(31, 138, 112, 0.14); color: var(--success); }
+    .status-banner.warning { background: rgba(181, 106, 0, 0.12); color: var(--warning); }
+    .status-banner.error { background: rgba(200, 59, 77, 0.12); color: var(--danger); }
+
+    .summary-list, .issue-list {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .summary-item {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 12px;
+      background: rgba(29, 37, 51, 0.04);
+      border-radius: 12px;
+    }
+
+    .summary-item span:last-child { color: var(--muted); }
+
+    .issue-list li {
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(29, 37, 51, 0.05);
+      line-height: 1.45;
+    }
+
+    .issue-list li.structural { background: rgba(200, 59, 77, 0.12); }
+    .issue-list li.validation { background: rgba(181, 106, 0, 0.12); }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .legend-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: rgba(29, 37, 51, 0.05);
+    }
+
+    .board-wrap {
+      position: relative;
+      width: min(100%, 78vh);
+      aspect-ratio: 1;
+      align-self: center;
+      background: linear-gradient(160deg, rgba(255,255,255,0.85), rgba(255,248,238,0.92));
+      border-radius: 28px;
+      border: 1px solid rgba(29, 37, 51, 0.08);
+      overflow: hidden;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.55);
+    }
+
+    .board {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      padding: 18px;
+      z-index: 1;
+    }
+
+    .cell {
+      border: 1px solid rgba(29, 37, 51, 0.09);
+      background: var(--cell-fill, rgba(29, 37, 51, 0.03));
+      padding: 0;
+      min-width: 0;
+      border-radius: 0;
+      position: relative;
+      transition: background 100ms ease, box-shadow 100ms ease;
+    }
+
+    .cell:hover { background: rgba(199, 102, 49, 0.18); transform: none; }
+    .cell.active-color { box-shadow: inset 0 0 0 2px rgba(29, 37, 51, 0.16); }
+    .cell.blocked { cursor: not-allowed; }
+
+    .board-overlay {
+      position: absolute;
+      inset: 18px;
+      z-index: 2;
+      pointer-events: none;
+      overflow: visible;
+    }
+
+    .json-preview {
+      margin: 0;
+      padding: 16px;
+      border-radius: 18px;
+      background: #1a2330;
+      color: #e8f0f7;
+      overflow: auto;
+      min-height: 220px;
+      max-height: 320px;
+      font-family: Consolas, "SFMono-Regular", monospace;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+
+    @media (max-width: 1180px) {
+      .app-shell { grid-template-columns: 1fr; }
+      .controls { position: static; }
+      .workspace { min-height: auto; }
+    }
+
+    @media (max-width: 720px) {
+      .app-shell { padding: 14px; }
+      .field-row, .actions, .tool-row, .palette-item { grid-template-columns: 1fr; }
+      .board-wrap { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="controls panel">
+      <div class="brand">
+        <h1>Manual Level Panel</h1>
+        <p>选颜色、拖格子、画连线。当前面板会把你画出的整条路径自动转成端点对，并用现有求解器帮你校验唯一性。</p>
+      </div>
+
+      <section class="panel-block">
+        <div class="section-header"><h2>关卡信息</h2></div>
+        <label>关卡 ID<input id="level-id" type="text" /></label>
+        <div class="field-row">
+          <label>难度
+            <select id="difficulty">
+              <option value="auto">Auto</option>
+              <option value="Easy">Easy</option>
+              <option value="Medium">Medium</option>
+              <option value="Hard">Hard</option>
+              <option value="Custom">Custom</option>
+            </select>
+          </label>
+          <label>格子尺寸<input id="grid-size" type="number" min="3" max="14" /></label>
+        </div>
+        <label>保存路径<input id="output-path" type="text" /></label>
+        <div class="actions">
+          <button id="validate-btn" class="accent">校验关卡</button>
+          <button id="save-btn">保存 JSON</button>
+        </div>
+        <div class="actions">
+          <button id="load-current-btn" class="ghost">加载当前路径</button>
+          <button id="next-level-btn" class="ghost">加载下一关 / 创建下一关</button>
+        </div>
+      </section>
+
+      <section class="panel-block">
+        <div class="section-header">
+          <h2>颜色面板</h2>
+          <button id="add-color-btn" class="ghost">新增颜色</button>
+        </div>
+        <div id="palette-list" class="palette-list"></div>
+        <div class="actions">
+          <button id="clear-selected-btn" class="ghost">清空当前颜色</button>
+          <button id="remove-selected-btn" class="danger">删除当前颜色</button>
+        </div>
+      </section>
+
+      <section class="panel-block">
+        <div class="section-header"><h2>编辑工具</h2></div>
+        <div class="tool-row">
+          <button id="tool-draw" class="tool-button" data-tool="draw">画线</button>
+          <button id="tool-erase" class="tool-button ghost" data-tool="erase">橡皮</button>
+        </div>
+        <p class="hint">桌面端操作最顺手：按住鼠标拖动可重新绘制当前颜色整条路径；用橡皮点任意有色格子，会清除对应整条线。</p>
+        <div class="actions single-action">
+          <button id="clear-board-btn" class="ghost">清空整块画布</button>
+        </div>
+      </section>
+
+      <section class="panel-block">
+        <div class="section-header"><h2>状态</h2></div>
+        <div id="status-banner" class="status-banner neutral">先选一个颜色，然后在右侧格子里拖出一整条路径。</div>
+        <div id="summary-list" class="summary-list"></div>
+        <ul id="issue-list" class="issue-list"></ul>
+      </section>
+    </aside>
+
+    <main class="workspace">
+      <section class="board-panel panel">
+        <div class="board-header">
+          <div class="board-title">
+            <h2>Grid + Connections</h2>
+            <p id="board-caption" class="board-caption"></p>
+          </div>
+          <div class="legend">
+            <span class="legend-chip"><span class="swatch" style="background:#c76631"></span>拖动重画当前颜色</span>
+            <span class="legend-chip"><span class="swatch" style="background:#1f8a70"></span>端点自动取每条线首尾</span>
+          </div>
+        </div>
+        <div class="board-wrap">
+          <div id="board" class="board"></div>
+          <svg id="board-overlay" class="board-overlay" viewBox="0 0 5 5" preserveAspectRatio="none"></svg>
+        </div>
+      </section>
+
+      <section class="output-panel panel">
+        <div class="section-header">
+          <h2>导出 JSON</h2>
+          <button id="copy-json-btn" class="ghost">复制 JSON</button>
+        </div>
+        <pre id="json-preview" class="json-preview">绘制路径后点击“校验关卡”，这里会显示当前草稿导出的 JSON。</pre>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    window.__FLOW_EDITOR_BOOTSTRAP__ = __BOOTSTRAP_JSON__;
+  </script>
+  <script>
+    const bootstrap = window.__FLOW_EDITOR_BOOTSTRAP__;
+    const defaultSamples = [
+      { name: "Sunset", hex: "#ef6c57" },
+      { name: "Lagoon", hex: "#2d7ff9" },
+      { name: "Citrus", hex: "#e3b505" },
+      { name: "Mint", hex: "#2aa876" },
+      { name: "Plum", hex: "#8b5cf6" },
+      { name: "Berry", hex: "#d94680" },
+      { name: "Slate", hex: "#475569" },
+      { name: "Copper", hex: "#c56a2d" }
+    ];
+
+    const state = {
+      size: bootstrap.size,
+      levelId: bootstrap.level_id,
+      difficulty: bootstrap.difficulty || "auto",
+      outputPath: bootstrap.output_path,
+      sourcePath: bootstrap.source_path || "",
+      palette: [...bootstrap.palette],
+      paths: Object.fromEntries((bootstrap.paths || []).map((item) => [String(item.color_id), item.cells.map((cell) => [...cell])])),
+      activeColorId: bootstrap.palette?.[0]?.color_id ?? null,
+      tool: "draw",
+      drawing: null,
+      result: bootstrap.analysis || null,
+      flashMessage: bootstrap.notice || "",
+      dirty: false,
+      nextColorId: Math.max(1, ...((bootstrap.palette || []).map((item) => item.color_id))) + 1,
+      lastRenderedSize: null
+    };
+
+    const levelIdInput = document.getElementById("level-id");
+    const difficultyInput = document.getElementById("difficulty");
+    const gridSizeInput = document.getElementById("grid-size");
+    const outputPathInput = document.getElementById("output-path");
+    const paletteList = document.getElementById("palette-list");
+    const board = document.getElementById("board");
+    const overlay = document.getElementById("board-overlay");
+    const statusBanner = document.getElementById("status-banner");
+    const summaryList = document.getElementById("summary-list");
+    const issueList = document.getElementById("issue-list");
+    const jsonPreview = document.getElementById("json-preview");
+    const boardCaption = document.getElementById("board-caption");
+    const validateButton = document.getElementById("validate-btn");
+    const saveButton = document.getElementById("save-btn");
+    const loadCurrentButton = document.getElementById("load-current-btn");
+    const nextLevelButton = document.getElementById("next-level-btn");
+    const copyButton = document.getElementById("copy-json-btn");
+    const clearSelectedButton = document.getElementById("clear-selected-btn");
+    const removeSelectedButton = document.getElementById("remove-selected-btn");
+    const clearBoardButton = document.getElementById("clear-board-btn");
+    const addColorButton = document.getElementById("add-color-btn");
+    const toolDrawButton = document.getElementById("tool-draw");
+    const toolEraseButton = document.getElementById("tool-erase");
+
+    levelIdInput.value = state.levelId;
+    difficultyInput.value = state.difficulty;
+    gridSizeInput.value = state.size;
+    outputPathInput.value = state.outputPath;
+
+    levelIdInput.addEventListener("input", () => {
+      state.levelId = levelIdInput.value.trim();
+      markDirty();
+      renderStatus();
+    });
+
+    difficultyInput.addEventListener("change", () => {
+      state.difficulty = difficultyInput.value;
+      markDirty();
+      renderStatus();
+    });
+
+    outputPathInput.addEventListener("input", () => {
+      state.outputPath = outputPathInput.value.trim();
+      markDirty();
+      renderStatus();
+    });
+
+    gridSizeInput.addEventListener("change", () => {
+      const next = Number(gridSizeInput.value);
+      if (!Number.isInteger(next) || next < 3 || next > 14) {
+        gridSizeInput.value = state.size;
+        return;
+      }
+
+      const hasPaths = Object.keys(state.paths).length > 0;
+      if (hasPaths && !window.confirm("修改格子尺寸会清空当前所有路径，继续吗？")) {
+        gridSizeInput.value = state.size;
+        return;
+      }
+
+      state.size = next;
+      state.paths = {};
+      state.result = null;
+      state.dirty = true;
+      state.flashMessage = "格子尺寸已更新，重新绘制路径后即可继续校验。";
+      renderAll();
+    });
+
+    validateButton.addEventListener("click", async () => {
+      await refreshAnalysis("/api/validate");
+    });
+
+    saveButton.addEventListener("click", async () => {
+      await refreshAnalysis("/api/save");
+    });
+
+    loadCurrentButton.addEventListener("click", async () => {
+      if (!confirmDiscardIfDirty("加载其他本地关卡")) return;
+      await refreshDocument("/api/load", {
+        target_path: state.outputPath || state.sourcePath
+      });
+    });
+
+    nextLevelButton.addEventListener("click", async () => {
+      if (!confirmDiscardIfDirty("切换到下一关")) return;
+      await refreshDocument("/api/next-level");
+    });
+
+    copyButton.addEventListener("click", async () => {
+      if (!state.result?.json_text) {
+        state.flashMessage = "当前还没有可复制的 JSON。";
+        renderStatus();
+        return;
+      }
+
+      try {
+        await navigator.clipboard.writeText(state.result.json_text);
+        state.flashMessage = "JSON 已复制到剪贴板。";
+      } catch (error) {
+        state.flashMessage = `复制失败：${error.message}`;
+      }
+      renderStatus();
+    });
+
+    clearSelectedButton.addEventListener("click", () => {
+      if (state.activeColorId == null) return;
+      delete state.paths[String(state.activeColorId)];
+      markDirty(`已清空颜色 ${state.activeColorId} 的路径。`);
+      renderAll();
+    });
+
+    removeSelectedButton.addEventListener("click", () => {
+      if (state.activeColorId == null) return;
+      state.palette = state.palette.filter((item) => item.color_id !== state.activeColorId);
+      delete state.paths[String(state.activeColorId)];
+      state.activeColorId = state.palette[0]?.color_id ?? null;
+      markDirty("已删除当前颜色。");
+      renderAll();
+    });
+
+    clearBoardButton.addEventListener("click", () => {
+      if (!Object.keys(state.paths).length) return;
+      if (!window.confirm("确认清空全部路径吗？")) return;
+      state.paths = {};
+      state.result = null;
+      state.dirty = true;
+      state.flashMessage = "画布已清空。";
+      renderAll();
+    });
+
+    addColorButton.addEventListener("click", () => {
+      const sample = defaultSamples[(state.nextColorId - 1) % defaultSamples.length];
+      state.palette.push({
+        color_id: state.nextColorId,
+        name: `${sample.name} ${state.nextColorId}`,
+        hex: sample.hex
+      });
+      state.activeColorId = state.nextColorId;
+      state.nextColorId += 1;
+      markDirty();
+      renderAll();
+    });
+
+    toolDrawButton.addEventListener("click", () => {
+      state.tool = "draw";
+      renderTools();
+      renderStatus();
+    });
+
+    toolEraseButton.addEventListener("click", () => {
+      state.tool = "erase";
+      renderTools();
+      renderStatus();
+    });
+
+    window.addEventListener("pointerup", finishDrawing);
+
+    paletteList.addEventListener("click", (event) => {
+      const target = event.target;
+      const selectButton = target.closest(".palette-select");
+      const removeButton = target.closest(".palette-remove");
+      if (selectButton) {
+        state.activeColorId = Number(selectButton.dataset.colorId);
+        renderAll();
+        return;
+      }
+      if (removeButton) {
+        const colorId = Number(removeButton.dataset.colorId);
+        state.palette = state.palette.filter((item) => item.color_id !== colorId);
+        delete state.paths[String(colorId)];
+        if (state.activeColorId === colorId) {
+          state.activeColorId = state.palette[0]?.color_id ?? null;
+        }
+        markDirty("已删除当前颜色。");
+        renderAll();
+      }
+    });
+
+    paletteList.addEventListener("input", (event) => {
+      const target = event.target;
+      if (target.classList.contains("palette-hex")) {
+        const colorId = Number(target.dataset.colorId);
+        const entry = state.palette.find((item) => item.color_id === colorId);
+        if (entry) {
+          entry.hex = target.value;
+          markDirty();
+          renderBoardOverlay();
+          renderPalette();
+        }
+      }
+      if (target.classList.contains("palette-label")) {
+        const colorId = Number(target.dataset.colorId);
+        const entry = state.palette.find((item) => item.color_id === colorId);
+        if (entry) {
+          entry.name = target.value;
+          markDirty();
+          renderPalette();
+        }
+      }
+    });
+
+    function renderAll() {
+      renderInputs();
+      buildBoardIfNeeded();
+      refreshBoardCells();
+      renderBoardOverlay();
+      renderPalette();
+      renderTools();
+      renderStatus();
+    }
+
+    function renderInputs() {
+      if (document.activeElement !== levelIdInput) levelIdInput.value = state.levelId;
+      if (document.activeElement !== outputPathInput) outputPathInput.value = state.outputPath;
+      if (document.activeElement !== difficultyInput) difficultyInput.value = state.difficulty;
+      if (document.activeElement !== gridSizeInput) gridSizeInput.value = state.size;
+    }
+
+    function renderPalette() {
+      paletteList.innerHTML = state.palette.map((item) => {
+        const length = (state.paths[String(item.color_id)] || []).length;
+        const active = item.color_id === state.activeColorId;
+        return `
+          <div class="palette-item">
+            <button class="palette-select" data-color-id="${item.color_id}" data-active="${active}">
+              <span class="swatch" style="background:${item.hex}"></span>
+              <span class="palette-name">${escapeHtml(item.name || `Color ${item.color_id}`)}</span>
+              <span class="palette-length">${length ? `${length} 格` : "未绘制"}</span>
+            </button>
+            <input class="palette-hex" data-color-id="${item.color_id}" type="color" value="${item.hex}" />
+            <input class="palette-label" data-color-id="${item.color_id}" type="text" value="${escapeAttribute(item.name || `Color ${item.color_id}`)}" />
+            <button class="palette-remove danger" data-color-id="${item.color_id}" title="删除颜色">删</button>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function renderTools() {
+      toolDrawButton.dataset.active = String(state.tool === "draw");
+      toolEraseButton.dataset.active = String(state.tool === "erase");
+      toolDrawButton.classList.toggle("ghost", state.tool !== "draw");
+      toolEraseButton.classList.toggle("ghost", state.tool !== "erase");
+    }
+
+    function buildBoardIfNeeded() {
+      if (state.lastRenderedSize === state.size) return;
+      state.lastRenderedSize = state.size;
+      board.innerHTML = "";
+      board.style.gridTemplateColumns = `repeat(${state.size}, minmax(0, 1fr))`;
+      overlay.setAttribute("viewBox", `0 0 ${state.size} ${state.size}`);
+
+      for (let y = 0; y < state.size; y += 1) {
+        for (let x = 0; x < state.size; x += 1) {
+          const cell = document.createElement("button");
+          cell.type = "button";
+          cell.className = "cell";
+          cell.dataset.x = String(x);
+          cell.dataset.y = String(y);
+          cell.addEventListener("pointerdown", (event) => handlePointerDown(event, x, y));
+          cell.addEventListener("pointerenter", () => handlePointerEnter(x, y));
+          board.appendChild(cell);
+        }
+      }
+    }
+
+    function refreshBoardCells() {
+      const occupancy = buildOccupancyMap();
+      boardCaption.textContent = buildBoardCaption();
+
+      for (const cell of board.children) {
+        const x = Number(cell.dataset.x);
+        const y = Number(cell.dataset.y);
+        const key = `${x},${y}`;
+        const owner = occupancy.get(key);
+        const active = owner != null && owner === state.activeColorId;
+        const blocked = owner != null && owner !== state.activeColorId && state.tool === "draw";
+        cell.classList.toggle("active-color", active);
+        cell.classList.toggle("blocked", blocked);
+        cell.style.setProperty("--cell-fill", owner == null ? "rgba(29, 37, 51, 0.03)" : withAlpha(colorHex(owner), 0.16));
+      }
+    }
+
+    function renderBoardOverlay() {
+      const markup = [];
+      for (const item of sortedPaths()) {
+        const points = item.cells.map((cell) => `${cell[0] + 0.5},${cell[1] + 0.5}`).join(" ");
+        const strokeWidth = item.color_id === state.activeColorId ? 0.34 : 0.30;
+        markup.push(`<polyline fill="none" stroke="${colorHex(item.color_id)}" stroke-width="${strokeWidth}" stroke-linejoin="round" stroke-linecap="round" points="${points}" opacity="0.96"></polyline>`);
+        if (item.cells.length >= 2) {
+          const start = item.cells[0];
+          const end = item.cells[item.cells.length - 1];
+          markup.push(`<circle cx="${start[0] + 0.5}" cy="${start[1] + 0.5}" r="0.22" fill="${colorHex(item.color_id)}"></circle>`);
+          markup.push(`<circle cx="${end[0] + 0.5}" cy="${end[1] + 0.5}" r="0.22" fill="${colorHex(item.color_id)}"></circle>`);
+        }
+      }
+      overlay.innerHTML = markup.join("");
+    }
+
+    function renderStatus() {
+      const result = state.result;
+      const summary = result?.summary || buildLocalSummary();
+      const issues = [];
+      if (result?.structural_issues?.length) {
+        for (const issue of result.structural_issues) issues.push({ text: issue, kind: "structural" });
+      }
+      if (result?.validation?.issues?.length) {
+        for (const issue of result.validation.issues) issues.push({ text: issue, kind: "validation" });
+      }
+
+      let bannerClass = "neutral";
+      let bannerText = state.flashMessage || "先选一个颜色，然后在右侧格子里拖出一整条路径。";
+      if (Object.keys(state.paths).length === 0) {
+        bannerText = state.flashMessage || "先从颜色面板选择一个颜色，再拖拽格子开始绘制。";
+      } else if (result?.structural_issues?.length) {
+        bannerClass = "error";
+        bannerText = "当前草稿存在结构问题，先修正后再导出。";
+      } else if (state.dirty) {
+        bannerText = state.flashMessage || "草稿已修改，点击“校验关卡”刷新结果。";
+      } else if (result?.validation?.valid) {
+        bannerClass = "success";
+        bannerText = "关卡校验通过：唯一、满格，并且没有低覆盖率替代解。";
+      } else if (result?.validation) {
+        bannerClass = "warning";
+        bannerText = `求解校验未通过：${result.validation.solve_status || "请继续调整"}`;
+      } else if (state.tool === "erase") {
+        bannerText = "橡皮模式：点击任意有色格子，会删除对应整条路径。";
+      } else {
+        bannerText = state.flashMessage || "拖动会替换当前颜色旧路径。路径的首尾会自动作为端点。";
+      }
+
+      if (result?.saved_path && !state.dirty) {
+        bannerClass = "success";
+        bannerText = `已保存到 ${result.saved_path}`;
+      }
+
+      statusBanner.className = `status-banner ${bannerClass}`;
+      statusBanner.textContent = bannerText;
+
+      const activeLength = state.activeColorId == null ? 0 : (state.paths[String(state.activeColorId)] || []).length;
+      summaryList.innerHTML = [
+        summaryItem("格子尺寸", `${state.size} x ${state.size}`),
+        summaryItem("颜色数量", `${summary.path_count || 0}`),
+        summaryItem("已铺格子", `${summary.coverage_cells || 0}/${summary.total_cells || state.size * state.size}`),
+        summaryItem("覆盖率", `${Math.round((summary.coverage_ratio || 0) * 100)}%`),
+        summaryItem("当前颜色长度", activeLength ? `${activeLength} 格` : "未绘制"),
+        summaryItem("当前模式", state.tool === "draw" ? "画线" : "橡皮")
+      ].join("");
+
+      issueList.innerHTML = issues.length
+        ? issues.map((issue) => `<li class="${issue.kind}">${escapeHtml(issue.text)}</li>`).join("")
+        : "<li>当前没有错误。你可以继续调整，或直接点击“校验关卡”查看求解器反馈。</li>";
+
+      jsonPreview.textContent = result?.json_text || "绘制路径后点击“校验关卡”，这里会显示当前草稿导出的 JSON。";
+    }
+
+    function buildBoardCaption() {
+      const active = state.palette.find((item) => item.color_id === state.activeColorId);
+      if (!active) return "先在左侧新增或选择一个颜色。";
+      const length = (state.paths[String(active.color_id)] || []).length;
+      return `当前颜色：#${active.color_id} ${active.name}。${length ? `已绘制 ${length} 格。` : "尚未绘制。"} ${state.tool === "draw" ? "拖动可以画线。" : "点击任意有色格子可擦除整条线。"}`;
+    }
+
+    function summaryItem(label, value) {
+      return `<div class="summary-item"><span>${escapeHtml(label)}</span><span>${escapeHtml(value)}</span></div>`;
+    }
+
+    function buildLocalSummary() {
+      const occupancy = buildOccupancyMap();
+      const lengths = Object.values(state.paths).map((cells) => cells.length).filter(Boolean);
+      return {
+        path_count: lengths.length,
+        coverage_cells: occupancy.size,
+        total_cells: state.size * state.size,
+        coverage_ratio: occupancy.size / (state.size * state.size),
+        min_path_cells: lengths.length ? Math.min(...lengths) : 0
+      };
+    }
+
+    function handlePointerDown(event, x, y) {
+      if (state.tool === "erase") {
+        eraseByCell(x, y);
+        return;
+      }
+      if (state.activeColorId == null) {
+        state.flashMessage = "请先在左侧选择一个颜色。";
+        renderStatus();
+        return;
+      }
+
+      const owner = ownerAt(x, y);
+      if (owner != null && owner !== state.activeColorId) return;
+
+      const previousPath = clonePath(state.paths[String(state.activeColorId)] || []);
+      state.drawing = { colorId: state.activeColorId, previousPath, pointerId: event.pointerId };
+      state.paths[String(state.activeColorId)] = [[x, y]];
+      state.flashMessage = "";
+      markDirty();
+      renderAll();
+    }
+
+    function handlePointerEnter(x, y) {
+      if (!state.drawing || state.tool !== "draw") return;
+      const colorId = state.drawing.colorId;
+      const key = String(colorId);
+      const current = state.paths[key] || [];
+      const last = current[current.length - 1];
+      if (!last) {
+        state.paths[key] = [[x, y]];
+        renderAll();
+        return;
+      }
+      if (last[0] === x && last[1] === y) return;
+
+      const previous = current[current.length - 2];
+      if (previous && previous[0] === x && previous[1] === y) {
+        current.pop();
+        state.paths[key] = current;
+        renderAll();
+        return;
+      }
+      if (Math.abs(last[0] - x) + Math.abs(last[1] - y) !== 1) return;
+
+      const owner = ownerAt(x, y);
+      if (owner != null && owner !== colorId) return;
+
+      const loopIndex = current.findIndex((cell) => cell[0] === x && cell[1] === y);
+      if (loopIndex !== -1) {
+        state.paths[key] = current.slice(0, loopIndex + 1);
+      } else {
+        current.push([x, y]);
+        state.paths[key] = current;
+      }
+      markDirty();
+      renderAll();
+    }
+
+    function finishDrawing() {
+      if (!state.drawing) return;
+      const key = String(state.drawing.colorId);
+      const current = state.paths[key] || [];
+      if (current.length < 2) {
+        if (state.drawing.previousPath.length >= 2) {
+          state.paths[key] = clonePath(state.drawing.previousPath);
+        } else {
+          delete state.paths[key];
+        }
+      }
+      state.drawing = null;
+      renderAll();
+    }
+
+    function eraseByCell(x, y) {
+      const owner = ownerAt(x, y);
+      if (owner == null) return;
+      delete state.paths[String(owner)];
+      if (state.activeColorId == null) state.activeColorId = owner;
+      markDirty(`已清除颜色 ${owner} 的路径。`);
+      renderAll();
+    }
+
+    function buildOccupancyMap() {
+      const map = new Map();
+      for (const item of sortedPaths()) {
+        for (const cell of item.cells) {
+          map.set(`${cell[0]},${cell[1]}`, item.color_id);
+        }
+      }
+      return map;
+    }
+
+    function ownerAt(x, y) {
+      for (const item of sortedPaths()) {
+        if (item.cells.some((cell) => cell[0] === x && cell[1] === y)) return item.color_id;
+      }
+      return null;
+    }
+
+    function sortedPaths() {
+      return Object.entries(state.paths)
+        .map(([colorId, cells]) => ({ color_id: Number(colorId), cells }))
+        .filter((item) => Array.isArray(item.cells) && item.cells.length)
+        .sort((a, b) => a.color_id - b.color_id);
+    }
+
+    function captureDraft() {
+      return {
+        size: state.size,
+        level_id: state.levelId || deriveLevelIdFromPath(),
+        difficulty: state.difficulty,
+        output_path: state.outputPath,
+        source_path: state.sourcePath,
+        palette: state.palette,
+        paths: sortedPaths()
+      };
+    }
+
+    async function refreshDocument(endpoint, overrides = {}) {
+      try {
+        setBusy(true);
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...captureDraft(), ...overrides })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || `HTTP ${response.status}`);
+        }
+        applyBootstrap(data);
+      } catch (error) {
+        state.flashMessage = `操作失败：${error.message}`;
+      } finally {
+        setBusy(false);
+        renderAll();
+      }
+    }
+
+    async function refreshAnalysis(endpoint) {
+      try {
+        setBusy(true);
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(captureDraft())
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || `HTTP ${response.status}`);
+        }
+        state.result = data;
+        state.outputPath = data.output_path || state.outputPath;
+        state.sourcePath = data.source_path || state.sourcePath;
+        if (data.output_path && !state.levelId.trim()) {
+          state.levelId = deriveLevelIdFromPath(data.output_path);
+        }
+        state.flashMessage = "";
+        state.dirty = false;
+      } catch (error) {
+        state.flashMessage = `操作失败：${error.message}`;
+      } finally {
+        setBusy(false);
+        renderAll();
+      }
+    }
+
+    function colorHex(colorId) {
+      return state.palette.find((item) => item.color_id === colorId)?.hex || "#475569";
+    }
+
+    function clonePath(path) {
+      return path.map((cell) => [...cell]);
+    }
+
+    function escapeHtml(text) {
+      return String(text)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+    }
+
+    function escapeAttribute(text) {
+      return escapeHtml(text).replaceAll("'", "&#39;");
+    }
+
+    function withAlpha(hex, alpha) {
+      const normalized = hex.replace("#", "");
+      const r = parseInt(normalized.slice(0, 2), 16);
+      const g = parseInt(normalized.slice(2, 4), 16);
+      const b = parseInt(normalized.slice(4, 6), 16);
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+
+    function applyBootstrap(data) {
+      state.size = data.size;
+      state.levelId = data.level_id;
+      state.difficulty = data.difficulty || "auto";
+      state.outputPath = data.output_path;
+      state.sourcePath = data.source_path || "";
+      state.palette = [...(data.palette || [])];
+      state.paths = Object.fromEntries((data.paths || []).map((item) => [String(item.color_id), item.cells.map((cell) => [...cell])]));
+      state.activeColorId = state.palette[0]?.color_id ?? null;
+      state.tool = "draw";
+      state.drawing = null;
+      state.result = data.analysis || null;
+      state.flashMessage = data.notice || "";
+      state.dirty = false;
+      state.nextColorId = Math.max(1, ...state.palette.map((item) => item.color_id)) + 1;
+      state.lastRenderedSize = null;
+      renderAll();
+    }
+
+    function confirmDiscardIfDirty(actionLabel) {
+      if (!state.dirty) return true;
+      return window.confirm(`${actionLabel} 会丢弃当前未保存修改，继续吗？`);
+    }
+
+    function deriveLevelIdFromPath(path = state.outputPath || state.sourcePath) {
+      if (!path) return "";
+      const normalized = String(path).replaceAll("\\", "/");
+      const filename = normalized.split("/").pop() || "";
+      return filename.endsWith(".json") ? filename.slice(0, -5) : filename;
+    }
+
+    function setBusy(isBusy) {
+      validateButton.disabled = isBusy;
+      saveButton.disabled = isBusy;
+      loadCurrentButton.disabled = isBusy;
+      nextLevelButton.disabled = isBusy;
+    }
+
+    function markDirty(message = "") {
+      state.dirty = true;
+      if (state.result?.saved_path) {
+        state.result = { ...state.result, saved_path: null };
+      }
+      if (message) {
+        state.flashMessage = message;
+      }
+    }
+
+    renderAll();
+  </script>
+</body>
+</html>

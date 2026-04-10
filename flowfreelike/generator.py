@@ -17,6 +17,19 @@ SHORTEST_PATH_CAP = 12
 HIGH_FLEX_PATH_THRESHOLD = 6
 BASE_SOLVER_PATH_CAP = 256
 EXTENDED_SOLVER_PATH_CAP = 768
+AESTHETIC_GATE_FAILURES = {
+    "turns",
+    "straight",
+    "zero_turns",
+    "too_many_short_segments",
+    "missing_anchor_segment",
+}
+AMBIGUITY_GATE_FAILURES = {
+    "shortest_choices",
+    "high_flex",
+    "loose_endpoints",
+    "path_slack",
+}
 
 
 def generate_level(
@@ -55,13 +68,11 @@ def generate_level(
                 size,
                 target_difficulty,
             )
-            if gate_failures:
-                if any(
-                    reason in {"turns", "straight", "zero_turns", "too_many_short_segments", "missing_anchor_segment"}
-                    for reason in gate_failures
-                ):
+            aesthetic_failures, ambiguity_failures = _split_gate_failures(gate_failures)
+            if aesthetic_failures or ambiguity_failures:
+                if aesthetic_failures:
                     aesthetic_rejections += 1
-                if any(reason in {"shortest_choices", "high_flex", "loose_endpoints", "path_slack"} for reason in gate_failures):
+                if ambiguity_failures:
                     ambiguity_rejections += 1
                 continue
 
@@ -74,11 +85,6 @@ def generate_level(
                 for index, segment in enumerate(segments)
             }
 
-            duplicate_of = find_duplicate_level(size=size, dots=dots, level_index=level_index)
-            if duplicate_of is not None:
-                duplicate_rejections += 1
-                continue
-
             alternative_result = solve_puzzle(
                 size=size,
                 dots=dots,
@@ -88,7 +94,12 @@ def generate_level(
                 known_solution=known_solution,
                 exclude_known_solution=True,
             )
-            if alternative_result.status == "search_limit" and _should_retry_search_limit(size, segments, ambiguity_metrics, length_metrics):
+            if alternative_result.status == "search_limit" and _should_retry_search_limit(
+                size,
+                segments,
+                ambiguity_metrics,
+                length_metrics,
+            ):
                 search_limit_retries += 1
                 alternative_result = solve_puzzle(
                     size=size,
@@ -100,14 +111,8 @@ def generate_level(
                     exclude_known_solution=True,
                 )
             if alternative_result.status == "search_limit" or alternative_result.solution_count > 0:
+                ambiguity_rejections += 1
                 continue
-
-            result = SolveResult(
-                status="unique",
-                solution_count=1,
-                stats=alternative_result.stats,
-                solutions=[known_solution],
-            )
 
             partial_result = solve_puzzle(
                 size=size,
@@ -125,9 +130,23 @@ def generate_level(
             if min_solution_path < MIN_PATH_CELLS or coverage_cells != size * size:
                 continue
 
-            difficulty = _grade(result)
+            blind_result = _solve_blind_for_grading(size=size, dots=dots)
+            blind_solution = blind_result.solutions[0] if blind_result.solutions else solution
+            difficulty = _grade(blind_result)
             if target_difficulty and difficulty.lower() != target_difficulty.lower():
                 continue
+
+            duplicate_of = find_duplicate_level(size=size, dots=dots, level_index=level_index)
+            if duplicate_of is not None:
+                duplicate_rejections += 1
+                continue
+
+            result = SolveResult(
+                status="unique",
+                solution_count=1,
+                stats=blind_result.stats,
+                solutions=[blind_solution],
+            )
 
             level_id = f"candidate_{attempt:03d}_{size}x{size}_{difficulty.lower()}"
             metrics = {
@@ -140,6 +159,7 @@ def generate_level(
                 "ambiguity_rejections": ambiguity_rejections,
                 "search_limit_retries": search_limit_retries,
                 "verification_mode": "known_solution_alternative_search",
+                "grading_mode": "blind_first_solution_search",
                 "generation_mode": "multi_path_forest",
                 "candidate_batch_size": len(segment_candidates),
                 "min_solution_path_cells": min_solution_path,
@@ -157,7 +177,9 @@ def generate_level(
                 "segment_total_path_slack": ambiguity_metrics["total_path_slack"],
                 "segment_high_flex_count": ambiguity_metrics["high_flex_segments"],
                 "segment_loose_endpoint_count": ambiguity_metrics["loose_endpoint_count"],
+                "segment_gate_failures": ambiguity_failures,
                 **result.stats.to_dict(),
+                **_prefix_stats("verification_", alternative_result.stats.to_dict()),
             }
             puzzle = Puzzle(
                 level_id=level_id,
@@ -165,7 +187,7 @@ def generate_level(
                 difficulty=difficulty,
                 dots=dots,
                 metrics=metrics,
-                solution=known_solution,
+                solution=solution,
             )
             return puzzle, result
 
@@ -183,7 +205,8 @@ def export_level(puzzle: Puzzle, output_path: Path) -> None:
 
 
 def make_level_id(level_number: int, size: int, difficulty: str) -> str:
-    return f"lvl_{level_number:04d}_{size}x{size}_{difficulty.lower()}"
+    _ = size, difficulty
+    return f"{level_number:04d}"
 
 
 def _generate_segment_cover_candidates(
@@ -193,6 +216,7 @@ def _generate_segment_cover_candidates(
 ) -> list[list[tuple[Point, ...]]]:
     total_cells = size * size
     candidates: list[tuple[float, list[tuple[Point, ...]]]] = []
+    seen_states: set[tuple[tuple[Point, ...], ...]] = set()
 
     for _ in range(_path_cover_sample_count(size)):
         color_count = _pick_color_count(total_cells, rng, target_difficulty)
@@ -201,13 +225,124 @@ def _generate_segment_cover_candidates(
             continue
         segments = _apply_random_symmetry(segments, size, rng)
         rng.shuffle(segments)
-        score = _segment_partition_score(size, segments, target_difficulty)
-        candidates.append((score, segments))
+        for variant in _shape_segment_variants(size, segments, target_difficulty):
+            state_key = _segments_state_key(variant)
+            if state_key in seen_states:
+                continue
+            seen_states.add(state_key)
+            score = _segment_partition_score(size, variant, target_difficulty)
+            candidates.append((score, variant))
 
     if not candidates:
         raise ValueError("Failed to construct a valid multi-path cover.")
 
     return [segments for _, segments in sorted(candidates, key=lambda item: item[0], reverse=True)]
+
+
+def _solve_blind_for_grading(size: int, dots: list[Dot]) -> SolveResult:
+    blind_result = solve_puzzle(
+        size=size,
+        dots=dots,
+        solution_limit=1,
+        completion_mode="full",
+        path_cap=BASE_SOLVER_PATH_CAP,
+    )
+    if blind_result.status != "search_limit":
+        return blind_result
+
+    return solve_puzzle(
+        size=size,
+        dots=dots,
+        solution_limit=1,
+        completion_mode="full",
+        path_cap=EXTENDED_SOLVER_PATH_CAP,
+    )
+
+
+def _split_gate_failures(failures: list[str]) -> tuple[list[str], list[str]]:
+    aesthetic = [failure for failure in failures if failure in AESTHETIC_GATE_FAILURES]
+    ambiguity = [failure for failure in failures if failure in AMBIGUITY_GATE_FAILURES]
+    return aesthetic, ambiguity
+
+
+def _prefix_stats(prefix: str, metrics: dict[str, object]) -> dict[str, object]:
+    return {
+        f"{prefix}{key}": value
+        for key, value in metrics.items()
+    }
+
+
+def _segments_state_key(segments: list[tuple[Point, ...]]) -> tuple[tuple[Point, ...], ...]:
+    return tuple(sorted(segments))
+
+
+def _shape_segment_variants(
+    size: int,
+    segments: list[tuple[Point, ...]],
+    target_difficulty: str | None,
+) -> list[list[tuple[Point, ...]]]:
+    variants = [segments]
+    max_colors = _shape_color_cap(size, target_difficulty, len(segments))
+    if len(segments) >= max_colors:
+        return variants
+
+    base_score = _segment_partition_score(size, segments, target_difficulty)
+    first_wave = _split_for_shape(size, segments, target_difficulty, max_colors)
+    if not first_wave:
+        return variants
+
+    for score, refined in first_wave:
+        if score > base_score:
+            variants.append(refined)
+
+    best_score, best_variant = first_wave[0]
+    if best_score > base_score and len(best_variant) < max_colors:
+        second_wave = _split_for_shape(size, best_variant, target_difficulty, max_colors)
+        if second_wave and second_wave[0][0] > best_score:
+            variants.append(second_wave[0][1])
+
+    return variants
+
+
+def _split_for_shape(
+    size: int,
+    segments: list[tuple[Point, ...]],
+    target_difficulty: str | None,
+    max_colors: int,
+) -> list[tuple[float, list[tuple[Point, ...]]]]:
+    if len(segments) >= max_colors:
+        return []
+
+    refinements: list[tuple[float, list[tuple[Point, ...]]]] = []
+    seen_states: set[tuple[tuple[Point, ...], ...]] = set()
+
+    for index, segment in enumerate(segments):
+        if len(segment) < MIN_PATH_CELLS * 2:
+            continue
+
+        for split_after in range(MIN_PATH_CELLS - 1, len(segment) - MIN_PATH_CELLS):
+            left = segment[: split_after + 1]
+            right = segment[split_after + 1 :]
+            refined = segments[:index] + [left, right] + segments[index + 1 :]
+            state_key = _segments_state_key(refined)
+            if state_key in seen_states:
+                continue
+            seen_states.add(state_key)
+            score = _segment_partition_score(size, refined, target_difficulty)
+            refinements.append((score, refined))
+
+    refinements.sort(key=lambda item: item[0], reverse=True)
+    return refinements[:3]
+
+
+def _shape_color_cap(size: int, target_difficulty: str | None, current_colors: int) -> int:
+    max_possible = (size * size) // MIN_PATH_CELLS
+    difficulty = (target_difficulty or "").lower()
+    if difficulty == "hard":
+        return min(max_possible, max(current_colors, size))
+    if difficulty == "easy":
+        return min(max_possible, max(current_colors, size + 2))
+    return min(max_possible, max(current_colors, size + 1))
 
 
 def _build_path_cover(
@@ -568,16 +703,16 @@ def _segment_partition_score(
         + metrics["winding_segments"] * 5
         - metrics["zero_turn_segments"] * 5
         - metrics["longest_straight_run"] * 2
-        + min(2, lengths["anchor_segments"]) * 9
+        + min(3, lengths["anchor_segments"]) * 11
         + min(size + 3, lengths["length_spread"]) * 1.5
         + min(size * 2, lengths["max_length"]) * 0.5
         - lengths["short_segments"] * 6
-        - max(0, lengths["anchor_segments"] - 2) * 5
-        - ambiguity["total_shortest_path_choices"] * 5
-        - ambiguity["total_path_slack"] * 4
+        - max(0, lengths["anchor_segments"] - 3) * 4
+        - ambiguity["total_shortest_path_choices"] * 6
+        - ambiguity["total_path_slack"] * 5
         - ambiguity["high_flex_segments"] * 12
-        - ambiguity["loose_endpoint_count"] * 5
-        + ambiguity["edge_endpoint_count"] * 2
+        - ambiguity["loose_endpoint_count"] * 6
+        + ambiguity["edge_endpoint_count"] * 3
     )
 
     if target_difficulty:
@@ -621,17 +756,17 @@ def _candidate_gate_failures(
     max_zero_turn_segments = max(1, len(segments) // 3)
     min_total_turns = max(size - 1, len(segments) - 1)
     max_straight_run = max(3, size)
-    max_shortest_path_choices = max(4, size + size // 2)
+    max_shortest_path_choices = max(3, size + size // 3)
     max_high_flex_segments = max(1, len(segments) // 4)
     max_loose_endpoints = max(2, len(segments) - 1)
-    max_path_slack = max(size + len(segments), size * 2 - 2)
+    max_path_slack = max(size + len(segments) - 1, size * 2 - 3)
     max_short_segments = max(1, len(segments) // 2)
-    min_anchor_segments = 1 if size >= 6 and difficulty != "easy" else 0
+    min_anchor_segments = 1 if size >= 5 and difficulty != "easy" else 0
 
     if difficulty == "hard":
         max_short_segments = max(1, len(segments) // 3)
         min_anchor_segments = 1
-        max_path_slack = max(size + len(segments) - 2, size * 2 - 4)
+        max_path_slack = max(size + len(segments) - 3, size * 2 - 5)
     elif difficulty == "easy":
         max_short_segments = max(2, (len(segments) * 2) // 3)
         min_anchor_segments = 0
@@ -841,11 +976,11 @@ def _neighbors(point: Point, size: int) -> list[Point]:
 
 
 def _path_cover_sample_count(size: int) -> int:
-    return max(PATH_COVER_SAMPLE_COUNT_BASE, size + 4)
+    return max(PATH_COVER_SAMPLE_COUNT_BASE, size + 6)
 
 
 def _path_cover_restart_count(size: int) -> int:
-    return max(PATH_COVER_RESTARTS_BASE, size)
+    return max(PATH_COVER_RESTARTS_BASE, size + 2)
 
 
 def _pick_color_count(
@@ -854,39 +989,39 @@ def _pick_color_count(
     target_difficulty: str | None,
 ) -> int:
     size = int(total_cells ** 0.5)
-    upper = max(1, min(total_cells // MIN_PATH_CELLS, size + 3))
+    upper = max(1, min(total_cells // MIN_PATH_CELLS, size + 2))
 
     if target_difficulty:
         difficulty = target_difficulty.lower()
         if difficulty == "easy":
-            lower = max(3, size - 1)
+            lower = max(4, size)
             upper = min(upper, size + 2)
         elif difficulty == "hard":
             lower = max(2, size // 2)
             upper = min(upper, max(lower, size))
         else:
-            lower = max(3, size // 2 + 1)
+            lower = max(4, size - 1)
             upper = min(upper, size + 1)
     else:
-        lower = max(3, size // 2 + 1)
+        lower = max(4, size - 1)
         upper = min(upper, size + 1)
 
     lower = min(lower, upper)
     if lower == upper:
         return lower
 
-    first = rng.randint(lower, upper)
-    second = rng.randint(lower, upper)
-    third = rng.randint(lower, upper)
+    samples = sorted(rng.randint(lower, upper) for _ in range(5))
 
     if target_difficulty:
         difficulty = target_difficulty.lower()
         if difficulty == "easy":
-            return max(first, second, third)
+            return samples[-1]
         if difficulty == "hard":
-            return min(first, second, third)
+            return samples[0]
 
-    return sorted((first, second, third))[1]
+    if size >= 6:
+        return samples[-2]
+    return samples[2]
 
 
 def _grade(result: SolveResult) -> str:
