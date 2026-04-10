@@ -18,6 +18,7 @@ class LevelValidationReport:
     issues: list[str]
     solve_result: SolveResult | None
     duplicate_of: Path | None = None
+    partial_solution_result: SolveResult | None = None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -29,6 +30,8 @@ class LevelValidationReport:
             "solve_status": self.solve_result.status if self.solve_result else None,
             "solution_count": self.solve_result.solution_count if self.solve_result else None,
             "metrics": self.solve_result.stats.to_dict() if self.solve_result else None,
+            "partial_solve_status": self.partial_solution_result.status if self.partial_solution_result else None,
+            "partial_solution_count": self.partial_solution_result.solution_count if self.partial_solution_result else None,
         }
 
 
@@ -63,21 +66,21 @@ def validate_puzzle(
             else:
                 seen_points[point] = dot.color_id
 
-    if not issues:
-        if level_index is not None:
-            duplicate_of = find_duplicate_level(size=size, dots=dots, level_index=level_index)
-            if duplicate_of is not None:
-                issues.append(f"duplicates existing level {duplicate_of}.")
+    if not issues and level_index is not None:
+        duplicate_of = find_duplicate_level(size=size, dots=dots, level_index=level_index)
+        if duplicate_of is not None:
+            issues.append(f"duplicates existing level {duplicate_of}.")
 
     solve_result = None
+    partial_solution_result = None
     if not issues:
-        solve_result = solve_puzzle(size=size, dots=dots, solution_limit=2)
+        solve_result = solve_puzzle(size=size, dots=dots, solution_limit=2, completion_mode="full")
         if solve_result.status != "unique":
             issues.append(
-                f"solver status is {solve_result.status} with {solve_result.solution_count} solution(s)."
+                f"solver status is {solve_result.status} with {solve_result.solution_count} full-cover solution(s)."
             )
         elif not solve_result.solutions:
-            issues.append("solver returned unique without a materialized solution.")
+            issues.append("solver returned unique without a materialized full-cover solution.")
         else:
             solution = solve_result.solutions[0]
             min_path_cells = min(len(path_points) for path_points in solution.values())
@@ -91,6 +94,16 @@ def validate_puzzle(
                     f"solution coverage is {coverage_cells}/{size * size}; expected full coverage."
                 )
 
+    if not issues:
+        partial_solution_result = solve_puzzle(
+            size=size,
+            dots=dots,
+            solution_limit=1,
+            completion_mode="partial",
+        )
+        if partial_solution_result.solution_count > 0:
+            issues.append("puzzle has a connect-all solution whose coverage is below 100%.")
+
     return LevelValidationReport(
         path=path,
         level_id=level_id,
@@ -98,6 +111,7 @@ def validate_puzzle(
         issues=issues,
         solve_result=solve_result,
         duplicate_of=duplicate_of,
+        partial_solution_result=partial_solution_result,
     )
 
 

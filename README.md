@@ -7,7 +7,7 @@ Minimal Flow Free-like level generation pipeline built around four steps:
 3. Verify uniqueness with a backtracking solver.
 4. Grade difficulty from solver search metrics and export JSON.
 
-Generation now supports batch mode and pre-write validation. Only validated levels are written to the output directory. Duplicate detection still treats rotated or mirrored endpoint layouts as the same puzzle. Validation also enforces two gameplay constraints: every solved path must cover at least 3 cells including endpoints, and the final solution must cover 100% of the board.
+Generation now supports batch mode and pre-write validation. Only validated levels are written to the output directory. Duplicate detection still treats rotated or mirrored endpoint layouts as the same puzzle. Validation also enforces two gameplay constraints: every solved path must cover at least 3 cells including endpoints, and the final solution must cover 100% of the board. The path generator now randomizes the full-cover walk with backbite steps and prefers partitions with more turns and fewer long straight runs, so generated levels are less rigid than the original serpentine output.
 
 ## Usage
 
@@ -80,6 +80,8 @@ Low-level solver check for a single file:
     "duplicate_rejections": 2,
     "min_solution_path_cells": 3,
     "solution_coverage_ratio": 1.0,
+    "segment_turns_total": 11,
+    "segment_zero_turns": 1,
     "solver_backtracks": 0
   }
 }
