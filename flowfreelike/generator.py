@@ -165,6 +165,7 @@ def generate_level(
                 difficulty=difficulty,
                 dots=dots,
                 metrics=metrics,
+                solution=known_solution,
             )
             return puzzle, result
 

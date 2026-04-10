@@ -59,6 +59,12 @@ Low-level solver check for a single file:
 .venv\Scripts\python.exe main.py solve levels/lvl_0001_5x5_easy.json
 ```
 
+Preview a single file in the terminal:
+
+```bash
+.venv\Scripts\python.exe main.py preview levels/lvl_0001_5x5_easy.json
+```
+
 ## JSON format
 
 ```json
@@ -71,6 +77,12 @@ Low-level solver check for a single file:
       "color_id": 1,
       "p1": [0, 0],
       "p2": [2, 0]
+    }
+  ],
+  "solution": [
+    {
+      "color_id": 1,
+      "path": [[0, 0], [1, 0], [2, 0]]
     }
   ],
   "metrics": {
@@ -87,4 +99,4 @@ Low-level solver check for a single file:
 }
 ```
 
-`dots` uses coordinate pairs instead of a full board matrix, which keeps the level file small and easy to consume from Unity, Cocos, or a web frontend.
+`dots` uses coordinate pairs instead of a full board matrix, which keeps the level file small and easy to consume from Unity, Cocos, or a web frontend. Generated files now also embed one solved path per color under `solution`, so the CLI can preview the finished board and downstream tools can reuse it for hints.
