@@ -8,6 +8,7 @@ from flowfreelike.registry import build_level_fingerprint, build_level_groups, f
 from flowfreelike.solver import solve_puzzle
 
 MIN_PATH_CELLS = 3
+VALIDATION_PATH_CAP = 768
 
 
 @dataclass(slots=True)
@@ -74,7 +75,13 @@ def validate_puzzle(
     solve_result = None
     partial_solution_result = None
     if not issues:
-        solve_result = solve_puzzle(size=size, dots=dots, solution_limit=2, completion_mode="full")
+        solve_result = solve_puzzle(
+            size=size,
+            dots=dots,
+            solution_limit=2,
+            completion_mode="full",
+            path_cap=VALIDATION_PATH_CAP,
+        )
         if solve_result.status != "unique":
             issues.append(
                 f"solver status is {solve_result.status} with {solve_result.solution_count} full-cover solution(s)."
@@ -100,6 +107,7 @@ def validate_puzzle(
             dots=dots,
             solution_limit=1,
             completion_mode="partial",
+            path_cap=VALIDATION_PATH_CAP,
         )
         if partial_solution_result.solution_count > 0:
             issues.append("puzzle has a connect-all solution whose coverage is below 100%.")
